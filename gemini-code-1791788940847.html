@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistem Rekod Transit PBD</title>
+    
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Tailwind Config for Glassmorphism & Custom Colors -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        tp1: '#EF4444', // Merah
+                        tp2: '#F97316', // Oren
+                        tp3: '#EAB308', // Kuning
+                        tp4: '#3B82F6', // Biru
+                        tp5: '#A855F7', // Ungu
+                        tp6: '#22C55E', // Hijau
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+            background-attachment: fixed;
+            min-height: 100vh;
+        }
+
+        /* Glassmorphism utility */
+        .glass {
+            background: rgba(255, 255, 255, 0.45);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.2); 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(0, 0, 0, 0.2); 
+            border-radius: 4px;
+        }
+
+        /* Print Styles */
+        @media print {
+            body {
+                background: white !important;
+                color: black !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .glass, .glass-panel {
+                background: white !important;
+                backdrop-filter: none !important;
+                border: 1px solid #e5e7eb !important;
+                box-shadow: none !important;
+            }
+            .print-full-width {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+            textarea.print-no-border {
+                border: none !important;
+                background: transparent !important;
+                resize: none !important;
+                box-shadow: none !important;
+            }
+            canvas {
+                max-width: 100% !important;
+                height: auto !important;
+            }
+            .page-break {
+                page-break-before: always;
+            }
+        }
+    </style>
+</head>
+<body class="text-gray-800">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef } = React;
+
+        // Default Data
+        const defaultTopics = [
+            { id: 'T1', code: '5.1', name: 'Norma Masyarakat' },
+            { id: 'T2', code: '5.2', name: 'Individu Berkeperibadian Mulia' },
+            { id: 'T3', code: '5.3', name: 'Prinsip Keadilan & Keprihatinan' },
+            { id: 'T4', code: '5.4', name: 'Penggunaan TMK Secara Beretika' },
+            { id: 'T5', code: '6.1', name: 'Integriti Individu' },
+            { id: 'T6', code: '6.2', name: 'Integriti Keluarga' },
+            { id: 'T7', code: '6.3', name: 'Berperikemanusiaan' },
+            { id: 'T8', code: '7.1', name: 'Hak & Tanggungjawab Warganegara' },
+            { id: 'T9', code: '7.2', name: 'Perpaduan dalam Masyarakat' },
+            { id: 'T10', code: '7.3', name: 'Pengurusan Perbelanjaan Beretika' },
+            { id: 'T11', code: '7.4', name: 'Keunikan Rakyat Malaysia' },
+            { id: 'T12', code: '7.5', name: 'Kedaulatan Negara Tanggungjawab Bersama' },
+        ];
+
+        const defaultStudents = [
+            { id: 'S1', name: 'CHRIST PUTRA ELVINE A/L HANAFFIE', marks: { 'T1': 85, 'T2': 78, 'T3': 90, 'T4': 65, 'T5': 45, 'T6': 80, 'T7': 88, 'T8': 92, 'T9': 75, 'T10': 60, 'T11': 82, 'T12': 79 } },
+            { id: 'S2', name: 'ALVIRA A/P SANWIN', marks: { 'T1': 40, 'T2': 35, 'T3': 50, 'T4': 45, 'T5': 38, 'T6': 55, 'T7': 42, 'T8': 60, 'T9': 58, 'T10': 48, 'T11': 52, 'T12': 47 } },
+        ];
+
+        const defaultSettings = {
+            subject: 'Pendidikan Moral',
+            form: 'Tingkatan 4',
+            logo: '' // Base64 empty initially
+        };
+
+        // Utility Functions
+        const calculateTP = (mark) => {
+            if (mark === '' || mark == null) return '-';
+            const m = parseInt(mark);
+            if (isNaN(m)) return '-';
+            if (m <= 19) return 1;
+            if (m <= 39) return 2;
+            if (m <= 59) return 3;
+            if (m <= 74) return 4;
+            if (m <= 89) return 5;
+            return 6;
+        };
+
+        const getBadgeClass = (tp) => {
+            switch (tp) {
+                case 1: return 'bg-tp1 text-white';
+                case 2: return 'bg-tp2 text-white';
+                case 3: return 'bg-tp3 text-white';
+                case 4: return 'bg-tp4 text-white';
+                case 5: return 'bg-tp5 text-white';
+                case 6: return 'bg-tp6 text-white';
+                default: return 'bg-gray-200 text-gray-500';
+            }
+        };
+
+        const generateComment = (avgTP) => {
+            if (avgTP === '-') return '';
+            if (avgTP >= 5) return 'Tahniah! Pencapaian yang sangat cemerlang. Teruskan usaha dan bantu rakan-rakan lain. Tindakan pengayaan: Melibatkan diri dalam projek kepimpinan kelas.';
+            if (avgTP >= 3) return 'Pencapaian pada tahap sederhana dan memuaskan. Tingkatkan ulang kaji. Tindakan susulan: Latihan berfokus untuk topik yang belum dikuasai.';
+            return 'Perlu lebih tumpuan dan bimbingan berterusan. Tindakan susulan intervensi: Bimbingan rapi secara individu atau berkumpulan dan perbincangan bersama ibu bapa.';
+        };
+
+        // Main App Component
+        const App = () => {
+            const [activeTab, setActiveTab] = useState('dashboard');
+            
+            // State initialization from LocalStorage
+            const [students, setStudents] = useState(() => JSON.parse(localStorage.getItem('pbd_students')) || defaultStudents);
+            const [topics, setTopics] = useState(() => JSON.parse(localStorage.getItem('pbd_topics')) || defaultTopics);
+            const [settings, setSettings] = useState(() => JSON.parse(localStorage.getItem('pbd_settings')) || defaultSettings);
+
+            // Auto-save to LocalStorage
+            useEffect(() => {
+                localStorage.setItem('pbd_students', JSON.stringify(students));
+                localStorage.setItem('pbd_topics', JSON.stringify(topics));
+                localStorage.setItem('pbd_settings', JSON.stringify(settings));
+            }, [students, topics, settings]);
+
+            // Tabs array
+            const tabs = [
+                { id: 'dashboard', label: 'Dashboard' },
+                { id: 'rekod', label: 'Rekod Transit' },
+                { id: 'laporan', label: 'Pelaporan Individu' },
+                { id: 'tetapan', label: 'Tetapan' }
+            ];
+
+            return (
+                <div className="min-h-screen p-4 md:p-8 print-full-width">
+                    {/* Header */}
+                    <header className="glass rounded-2xl p-6 mb-6 flex flex-col md:flex-row justify-between items-center no-print">
+                        <div className="flex items-center gap-4 mb-4 md:mb-0">
+                            {settings.logo ? (
+                                <img src={settings.logo} alt="Logo" className="h-16 w-16 object-contain rounded-full bg-white/50 p-1" />
+                            ) : (
+                                <div className="h-16 w-16 rounded-full bg-white/50 flex items-center justify-center font-bold text-gray-400">LOGO</div>
+                            )}
+                            <div>
+                                <h1 className="text-2xl font-bold tracking-tight text-gray-900">Sistem Rekod Transit PBD</h1>
+                                <p className="text-sm font-medium text-gray-600">{settings.subject} - {settings.form}</p>
+                            </div>
+                        </div>
+                        <nav className="flex flex-wrap gap-2">
+                            {tabs.map(tab => (
+                                <button 
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`px-4 py-2 rounded-lg font-medium transition-all duration-200 ${activeTab === tab.id ? 'bg-white shadow-md text-blue-600' : 'hover:bg-white/40 text-gray-700'}`}
+                                >
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </nav>
+                    </header>
+
+                    {/* Content Area */}
+                    <main>
+                        {activeTab === 'dashboard' && <Dashboard students={students} topics={topics} />}
+                        {activeTab === 'rekod' && <RekodTransit students={students} setStudents={setStudents} topics={topics} />}
+                        {activeTab === 'laporan' && <LaporanIndividu students={students} topics={topics} settings={settings} />}
+                        {activeTab === 'tetapan' && <Tetapan settings={settings} setSettings={setSettings} topics={topics} setTopics={setTopics} students={students} setStudents={setStudents} />}
+                    </main>
+                </div>
+            );
+        };
+
+        /* ================= MODULE A: DASHBOARD ================= */
+        const Dashboard = ({ students, topics }) => {
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            // Compute statistics
+            let totalMarks = 0;
+            let totalEntries = 0;
+            let tpCounts = { 1:0, 2:0, 3:0, 4:0, 5:0, 6:0 };
+
+            const studentsWithAvgTP = students.map(s => {
+                let sTotal = 0;
+                let sCount = 0;
+                topics.forEach(t => {
+                    if (s.marks[t.id]) {
+                        const m = parseInt(s.marks[t.id]);
+                        sTotal += m;
+                        sCount++;
+                        totalMarks += m;
+                        totalEntries++;
+                        
+                        const tp = calculateTP(m);
+                        if (tpCounts[tp] !== undefined) tpCounts[tp]++;
+                    }
+                });
+                const sAvgMark = sCount ? sTotal / sCount : 0;
+                const overallTP = calculateTP(sAvgMark);
+                return { ...s, overallTP };
+            });
+
+            const classAvgMark = totalEntries ? (totalMarks / totalEntries).toFixed(1) : 0;
+            const classAvgTP = calculateTP(classAvgMark);
+
+            const interventionList = studentsWithAvgTP.filter(s => s.overallTP >= 1 && s.overallTP <= 2);
+            const excellentList = studentsWithAvgTP.filter(s => s.overallTP >= 5 && s.overallTP <= 6);
+
+            useEffect(() => {
+                if (chartInstance.current) {
+                    chartInstance.current.destroy();
+                }
+                const ctx = chartRef.current.getContext('2d');
+                chartInstance.current = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['TP1', 'TP2', 'TP3', 'TP4', 'TP5', 'TP6'],
+                        datasets: [{
+                            label: 'Jumlah Pelajar (mengikut entri topik)',
+                            data: [tpCounts[1], tpCounts[2], tpCounts[3], tpCounts[4], tpCounts[5], tpCounts[6]],
+                            backgroundColor: ['#EF4444', '#F97316', '#EAB308', '#3B82F6', '#A855F7', '#22C55E'],
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                    }
+                });
+                return () => chartInstance.current?.destroy();
+            }, [tpCounts]);
+
+            return (
+                <div className="space-y-6 animate-fade-in">
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div className="glass-panel p-6 rounded-2xl flex items-center gap-4">
+                            <div className="p-4 bg-white/60 rounded-xl shadow-sm text-3xl">👨‍🎓</div>
+                            <div>
+                                <p className="text-sm text-gray-500 font-semibold">Jumlah Pelajar</p>
+                                <p className="text-3xl font-bold text-gray-800">{students.length}</p>
+                            </div>
+                        </div>
+                        <div className="glass-panel p-6 rounded-2xl flex items-center gap-4">
+                            <div className="p-4 bg-white/60 rounded-xl shadow-sm text-3xl">📊</div>
+                            <div>
+                                <p className="text-sm text-gray-500 font-semibold">Purata Markah Kelas</p>
+                                <p className="text-3xl font-bold text-gray-800">{classAvgMark}%</p>
+                            </div>
+                        </div>
+                        <div className="glass-panel p-6 rounded-2xl flex items-center gap-4">
+                            <div className="p-4 bg-white/60 rounded-xl shadow-sm text-3xl">🏆</div>
+                            <div>
+                                <p className="text-sm text-gray-500 font-semibold">Purata TP Kelas</p>
+                                <div className="flex items-center gap-2 mt-1">
+                                    <span className={`px-3 py-1 rounded-md text-lg font-bold shadow-sm ${getBadgeClass(classAvgTP)}`}>TP {classAvgTP}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* Chart */}
+                        <div className="glass-panel p-6 rounded-2xl flex flex-col h-80">
+                            <h3 className="text-lg font-bold text-gray-800 mb-4">Taburan Tahap Penguasaan (Keseluruhan Topik)</h3>
+                            <div className="flex-1 relative">
+                                <canvas ref={chartRef}></canvas>
+                            </div>
+                        </div>
+
+                        {/* Lists */}
+                        <div className="grid grid-cols-1 gap-6">
+                            {/* Intervention */}
+                            <div className="glass-panel p-6 rounded-2xl">
+                                <h3 className="text-lg font-bold text-red-600 mb-4 flex items-center gap-2">⚠️ Senarai Intervensi (TP1-TP2)</h3>
+                                <div className="space-y-3 max-h-40 overflow-y-auto">
+                                    {interventionList.length === 0 ? <p className="text-gray-500 text-sm">Tiada pelajar dalam senarai ini.</p> : interventionList.map(s => (
+                                        <div key={s.id} className="bg-white/50 p-3 rounded-xl flex justify-between items-center shadow-sm">
+                                            <div>
+                                                <p className="font-semibold text-gray-800 text-sm">{s.name}</p>
+                                                <p className="text-xs text-gray-500 mt-1">Cadangan: Bimbingan rapi individu/berkumpulan</p>
+                                            </div>
+                                            <span className={`text-xs font-bold px-2 py-1 rounded shadow-sm ${getBadgeClass(s.overallTP)}`}>TP {s.overallTP}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            
+                            {/* Excellent */}
+                            <div className="glass-panel p-6 rounded-2xl">
+                                <h3 className="text-lg font-bold text-green-600 mb-4 flex items-center gap-2">⭐ Senarai Cemerlang (TP5-TP6)</h3>
+                                <div className="space-y-3 max-h-40 overflow-y-auto">
+                                    {excellentList.length === 0 ? <p className="text-gray-500 text-sm">Tiada pelajar dalam senarai ini.</p> : excellentList.map(s => (
+                                        <div key={s.id} className="bg-white/50 p-3 rounded-xl flex justify-between items-center shadow-sm">
+                                            <div>
+                                                <p className="font-semibold text-gray-800 text-sm">{s.name}</p>
+                                                <p className="text-xs text-gray-500 mt-1">Cadangan: Pengayaan & Mentor Rakan Sebaya</p>
+                                            </div>
+                                            <span className={`text-xs font-bold px-2 py-1 rounded shadow-sm ${getBadgeClass(s.overallTP)}`}>TP {s.overallTP}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        /* ================= MODULE B: REKOD TRANSIT ================= */
+        const RekodTransit = ({ students, setStudents, topics }) => {
+            const [newStudentName, setNewStudentName] = useState('');
+
+            const handleMarkChange = (studentId, topicId, val) => {
+                setStudents(students.map(s => {
+                    if (s.id === studentId) {
+                        return { ...s, marks: { ...s.marks, [topicId]: val } };
+                    }
+                    return s;
+                }));
+            };
+
+            const addStudent = () => {
+                if (!newStudentName.trim()) return;
+                const newId = 'S' + Date.now();
+                setStudents([...students, { id: newId, name: newStudentName.toUpperCase(), marks: {} }]);
+                setNewStudentName('');
+            };
+
+            const removeStudent = (id) => {
+                if(confirm('Adakah anda pasti mahu memadam rekod pelajar ini?')) {
+                    setStudents(students.filter(s => s.id !== id));
+                }
+            };
+
+            return (
+                <div className="glass-panel p-6 rounded-2xl animate-fade-in">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                        <h2 className="text-2xl font-bold text-gray-800">Kemasukan Data PBD</h2>
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <input 
+                                type="text" 
+                                placeholder="Nama Pelajar Baru..." 
+                                className="px-4 py-2 rounded-lg border border-white/40 bg-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400 w-full md:w-64"
+                                value={newStudentName}
+                                onChange={(e) => setNewStudentName(e.target.value)}
+                                onKeyPress={e => e.key === 'Enter' && addStudent()}
+                            />
+                            <button onClick={addStudent} className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-semibold shadow-md transition-colors whitespace-nowrap">
+                                + Tambah
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto pb-4">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr>
+                                    <th className="p-3 border-b-2 border-gray-300 font-semibold min-w-[250px] sticky left-0 bg-white/80 backdrop-blur-md z-10">Nama Pelajar</th>
+                                    {topics.map(t => (
+                                        <th key={t.id} className="p-3 border-b-2 border-gray-300 font-semibold min-w-[120px] text-center" title={t.name}>
+                                            <div className="text-sm">{t.code}</div>
+                                            <div className="text-xs font-normal text-gray-500 truncate w-24 mx-auto">{t.name}</div>
+                                        </th>
+                                    ))}
+                                    <th className="p-3 border-b-2 border-gray-300 font-semibold text-center sticky right-0 bg-white/80 backdrop-blur-md">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {students.length === 0 ? (
+                                    <tr><td colSpan={topics.length + 2} className="p-6 text-center text-gray-500">Tiada rekod pelajar. Tambah pelajar untuk bermula.</td></tr>
+                                ) : students.map((s, idx) => (
+                                    <tr key={s.id} className={idx % 2 === 0 ? 'bg-white/20' : 'bg-transparent'}>
+                                        <td className="p-3 border-b border-gray-200 sticky left-0 bg-white/40 backdrop-blur-sm font-medium text-sm">{s.name}</td>
+                                        {topics.map(t => {
+                                            const mark = s.marks[t.id] || '';
+                                            const tp = calculateTP(mark);
+                                            return (
+                                                <td key={t.id} className="p-3 border-b border-gray-200 text-center">
+                                                    <div className="flex flex-col items-center gap-1">
+                                                        <input 
+                                                            type="number" 
+                                                            min="0" max="100"
+                                                            value={mark}
+                                                            onChange={(e) => handleMarkChange(s.id, t.id, e.target.value)}
+                                                            className="w-16 p-1 text-center rounded border border-gray-300 bg-white/70 focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
+                                                            placeholder="0"
+                                                        />
+                                                        {tp !== '-' && (
+                                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shadow-sm ${getBadgeClass(tp)}`}>TP {tp}</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                            );
+                                        })}
+                                        <td className="p-3 border-b border-gray-200 text-center sticky right-0 bg-white/40 backdrop-blur-sm">
+                                            <button onClick={() => removeStudent(s.id)} className="text-red-500 hover:text-red-700 bg-red-100 hover:bg-red-200 p-2 rounded-lg transition-colors" title="Padam Pelajar">
+                                                🗑️
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            );
+        };
+
+        /* ================= MODULE C: INDIVIDUAL REPORT ================= */
+        const LaporanIndividu = ({ students, topics, settings }) => {
+            const [selectedStudentId, setSelectedStudentId] = useState('');
+            const chartRef = useRef(null);
+            const chartInstance = useRef(null);
+
+            const student = students.find(s => s.id === selectedStudentId);
+
+            // Calc overall for selected student
+            let sTotal = 0;
+            let sCount = 0;
+            let marksData = [];
+            
+            if (student) {
+                topics.forEach(t => {
+                    const m = student.marks[t.id] ? parseInt(student.marks[t.id]) : 0;
+                    if(student.marks[t.id]) {
+                        sTotal += m;
+                        sCount++;
+                    }
+                    marksData.push(m);
+                });
+            }
+            
+            const avgMark = sCount ? sTotal / sCount : 0;
+            const overallTP = calculateTP(avgMark);
+            const autoComment = generateComment(overallTP);
+
+            useEffect(() => {
+                if (!student) return;
+                
+                if (chartInstance.current) {
+                    chartInstance.current.destroy();
+                }
+                const ctx = chartRef.current.getContext('2d');
+                chartInstance.current = new Chart(ctx, {
+                    type: 'radar',
+                    data: {
+                        labels: topics.map(t => t.code),
+                        datasets: [{
+                            label: 'Markah (%)',
+                            data: marksData,
+                            backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                            borderColor: 'rgba(59, 130, 246, 1)',
+                            pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            r: {
+                                min: 0,
+                                max: 100,
+                                ticks: { stepSize: 20 }
+                            }
+                        }
+                    }
+                });
+                return () => chartInstance.current?.destroy();
+            }, [student, topics, marksData]);
+
+            return (
+                <div className="animate-fade-in">
+                    <div className="glass-panel p-6 rounded-2xl mb-6 no-print flex flex-col sm:flex-row items-center gap-4">
+                        <label className="font-semibold text-gray-700">Pilih Pelajar:</label>
+                        <select 
+                            className="flex-1 px-4 py-2 rounded-lg border border-white/40 bg-white/70 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                            value={selectedStudentId}
+                            onChange={e => setSelectedStudentId(e.target.value)}
+                        >
+                            <option value="">-- Sila Pilih Pelajar --</option>
+                            {students.map(s => (
+                                <option key={s.id} value={s.id}>{s.name}</option>
+                            ))}
+                        </select>
+                        <button 
+                            onClick={() => window.print()}
+                            disabled={!student}
+                            className="bg-gray-800 hover:bg-gray-900 text-white px-6 py-2 rounded-lg font-semibold shadow-md transition-colors disabled:opacity-50"
+                        >
+                            🖨️ Cetak / PDF
+                        </button>
+                    </div>
+
+                    {student && (
+                        <div className="glass-panel p-8 rounded-2xl print-full-width">
+                            {/* Report Header */}
+                            <div className="flex justify-between items-center border-b-2 border-gray-300 pb-6 mb-6">
+                                <div className="flex items-center gap-4">
+                                    {settings.logo && <img src={settings.logo} alt="Logo Sekolah" className="h-20 w-20 object-contain" />}
+                                    <div>
+                                        <h2 className="text-2xl font-bold uppercase text-gray-800">Laporan Pentaksiran Bilik Darjah</h2>
+                                        <p className="text-gray-600 font-medium">Subjek: {settings.subject} | {settings.form}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Student Info */}
+                            <div className="flex justify-between items-end mb-8 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                                <div>
+                                    <p className="text-sm text-gray-500 mb-1">Nama Pelajar</p>
+                                    <h3 className="text-xl font-bold text-gray-900">{student.name}</h3>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-sm text-gray-500 mb-1">Tahap Penguasaan (K)</p>
+                                    <span className={`text-xl font-bold px-4 py-1.5 rounded-lg shadow-sm ${getBadgeClass(overallTP)}`}>
+                                        TP {overallTP}
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                                {/* Table Details */}
+                                <div>
+                                    <table className="w-full text-left border-collapse bg-white/40 rounded-lg overflow-hidden">
+                                        <thead className="bg-gray-100/60">
+                                            <tr>
+                                                <th className="p-3 border border-gray-200">Kod</th>
+                                                <th className="p-3 border border-gray-200">Topik</th>
+                                                <th className="p-3 border border-gray-200 text-center">Markah</th>
+                                                <th className="p-3 border border-gray-200 text-center">TP</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {topics.map(t => {
+                                                const m = student.marks[t.id] || '-';
+                                                const tp = calculateTP(m);
+                                                return (
+                                                    <tr key={t.id} className="border border-gray-200">
+                                                        <td className="p-2 border border-gray-200 text-sm font-medium">{t.code}</td>
+                                                        <td className="p-2 border border-gray-200 text-sm text-gray-600">{t.name}</td>
+                                                        <td className="p-2 border border-gray-200 text-center font-bold">{m}</td>
+                                                        <td className="p-2 border border-gray-200 text-center">
+                                                            {tp !== '-' && <span className={`text-xs font-bold px-2 py-1 rounded shadow-sm ${getBadgeClass(tp)}`}>TP {tp}</span>}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+
+                                {/* Radar Chart */}
+                                <div className="h-80 bg-white/40 rounded-xl p-4 border border-gray-200 flex flex-col items-center">
+                                    <h4 className="font-semibold text-gray-700 mb-2 text-sm">Graf Perkembangan</h4>
+                                    <div className="w-full h-full relative">
+                                        <canvas ref={chartRef}></canvas>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Comments & Signatures */}
+                            <div className="space-y-6">
+                                <div>
+                                    <h4 className="font-bold text-gray-800 mb-2">Ulasan Guru & Tindakan Susulan:</h4>
+                                    <textarea 
+                                        className="w-full p-4 rounded-xl border border-gray-300 bg-white/60 focus:outline-none focus:ring-2 focus:ring-blue-400 print-no-border text-sm"
+                                        rows="3"
+                                        defaultValue={autoComment}
+                                    ></textarea>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-8 mt-12 pt-8 border-t border-gray-300">
+                                    <div className="text-center">
+                                        <div className="border-b-2 border-gray-400 w-48 mx-auto mb-2 mt-8"></div>
+                                        <p className="font-semibold text-gray-700">Tandatangan Guru</p>
+                                        <p className="text-sm text-gray-500">Tarikh: ..............................</p>
+                                    </div>
+                                    <div className="text-center">
+                                        <div className="border-b-2 border-gray-400 w-48 mx-auto mb-2 mt-8"></div>
+                                        <p className="font-semibold text-gray-700">Tandatangan Ibu Bapa/Penjaga</p>
+                                        <p className="text-sm text-gray-500">Tarikh: ..............................</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        /* ================= MODULE D: SETTINGS ================= */
+        const Tetapan = ({ settings, setSettings, topics, setTopics, students, setStudents }) => {
+            
+            const handleLogoUpload = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        setSettings({ ...settings, logo: reader.result });
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const exportData = () => {
+                const dataStr = JSON.stringify({ settings, topics, students });
+                const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+                const exportFileDefaultName = 'backup_pbd.json';
+                const linkElement = document.createElement('a');
+                linkElement.setAttribute('href', dataUri);
+                linkElement.setAttribute('download', exportFileDefaultName);
+                linkElement.click();
+            };
+
+            const importData = (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        const parsed = JSON.parse(event.target.result);
+                        if (parsed.settings && parsed.topics && parsed.students) {
+                            setSettings(parsed.settings);
+                            setTopics(parsed.topics);
+                            setStudents(parsed.students);
+                            alert('Data berjaya dimuat naik!');
+                        } else {
+                            alert('Format fail tidak sah.');
+                        }
+                    } catch(err) {
+                        alert('Ralat semasa memproses fail.');
+                    }
+                };
+                reader.readAsText(file);
+            };
+
+            const addTopic = () => {
+                const newId = 'T' + Date.now();
+                setTopics([...topics, { id: newId, code: 'Baru', name: 'Topik Baru' }]);
+            };
+
+            const updateTopic = (id, field, value) => {
+                setTopics(topics.map(t => t.id === id ? { ...t, [field]: value } : t));
+            };
+
+            const removeTopic = (id) => {
+                if(confirm('Padam topik ini? Data markah untuk topik ini juga akan hilang.')) {
+                    setTopics(topics.filter(t => t.id !== id));
+                    // Cleanup marks
+                    const newStudents = students.map(s => {
+                        const newMarks = { ...s.marks };
+                        delete newMarks[id];
+                        return { ...s, marks: newMarks };
+                    });
+                    setStudents(newStudents);
+                }
+            };
+
+            return (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
+                    {/* General Settings */}
+                    <div className="glass-panel p-6 rounded-2xl space-y-6">
+                        <h3 className="text-xl font-bold text-gray-800 border-b border-gray-300 pb-2">Maklumat Asas</h3>
+                        
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1">Logo Sekolah</label>
+                            <div className="flex items-center gap-4">
+                                {settings.logo && <img src={settings.logo} className="w-16 h-16 object-contain rounded-md bg-white border" />}
+                                <input type="file" accept="image/*" onChange={handleLogoUpload} className="text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100" />
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1">Nama Subjek</label>
+                            <input 
+                                type="text" 
+                                value={settings.subject} 
+                                onChange={e => setSettings({...settings, subject: e.target.value})}
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-400 bg-white/70"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-1">Tahun / Tingkatan</label>
+                            <input 
+                                type="text" 
+                                value={settings.form} 
+                                onChange={e => setSettings({...settings, form: e.target.value})}
+                                className="w-full px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-400 bg-white/70"
+                            />
+                        </div>
+
+                        <div className="border-t border-gray-300 pt-4 mt-6">
+                            <h4 className="font-semibold text-gray-800 mb-3">Pengurusan Data (Backup)</h4>
+                            <div className="flex gap-4">
+                                <button onClick={exportData} className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm">
+                                    ⬇️ Eksport JSON
+                                </button>
+                                <label className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors shadow-sm cursor-pointer inline-block">
+                                    ⬆️ Import JSON
+                                    <input type="file" accept=".json" className="hidden" onChange={importData} />
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* DSKP Topics Manager */}
+                    <div className="glass-panel p-6 rounded-2xl flex flex-col h-[600px]">
+                        <div className="flex justify-between items-center border-b border-gray-300 pb-2 mb-4">
+                            <h3 className="text-xl font-bold text-gray-800">Pengurusan Topik DSKP</h3>
+                            <button onClick={addTopic} className="bg-gray-800 hover:bg-gray-900 text-white px-3 py-1 rounded-md text-sm transition-colors">+ Topik</button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto space-y-3 pr-2">
+                            {topics.map((t, index) => (
+                                <div key={t.id} className="flex items-center gap-2 bg-white/60 p-3 rounded-xl border border-gray-200">
+                                    <span className="font-bold text-gray-400 w-6">{index+1}.</span>
+                                    <input 
+                                        type="text" 
+                                        value={t.code} 
+                                        onChange={(e) => updateTopic(t.id, 'code', e.target.value)}
+                                        className="w-20 px-2 py-1 rounded bg-transparent border-b border-gray-300 focus:border-blue-500 focus:outline-none text-sm font-semibold"
+                                        placeholder="Kod"
+                                    />
+                                    <input 
+                                        type="text" 
+                                        value={t.name} 
+                                        onChange={(e) => updateTopic(t.id, 'name', e.target.value)}
+                                        className="flex-1 px-2 py-1 rounded bg-transparent border-b border-gray-300 focus:border-blue-500 focus:outline-none text-sm"
+                                        placeholder="Nama Topik"
+                                    />
+                                    <button onClick={() => removeTopic(t.id)} className="text-red-500 hover:bg-red-100 p-1 rounded transition-colors" title="Padam Topik">✖</button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        // Render App
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
